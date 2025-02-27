@@ -99,12 +99,15 @@ jobs:
         env:
           CURSOR_VERSION: ${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}
           GIT_SHA: ${{ github.sha }}
+      
+      - name: Add SHORT_SHA env property with commit short sha
+        run: echo "SHORT_SHA=`echo ${GITHUB_SHA} | cut -c1-8`" >> $GITHUB_ENV
 
       - name: 上传 DEB 包
         if: ${{ github.event_name != 'schedule' || steps.check_version.outputs.skip_build == 'false' }}
         uses: actions/upload-artifact@v4
         with:
-          name: cursor-deb-v${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}-${{ github.sha }}
+          name: cursor-deb-v${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}-${{ env.SHORT_SHA }}
           path: |
             build/cursor_*_amd64.deb
             build/version_info.txt
