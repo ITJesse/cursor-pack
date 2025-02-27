@@ -89,6 +89,13 @@ jobs:
           find build -name "*.deb" | while read file; do
             echo "构建的 DEB 包: $file ($(du -h "$file" | cut -f1))"
           done
+          
+          # 创建版本信息文件
+          VERSION="${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}"
+          echo "版本: $VERSION" > build/version_info.txt
+          echo "构建时间: $(date)" >> build/version_info.txt
+          echo "提交: ${{ github.sha }}" >> build/version_info.txt
+          echo "工作流: ${{ github.workflow }}" >> build/version_info.txt
         env:
           CURSOR_VERSION: ${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}
 
@@ -96,38 +103,8 @@ jobs:
         if: ${{ github.event_name != 'schedule' || steps.check_version.outputs.skip_build == 'false' }}
         uses: actions/upload-artifact@v4
         with:
-          name: cursor-deb-package
-          path: build/cursor_*_amd64.deb
-          retention-days: 7
-          
-      - name: 创建或更新发布
-        if: ${{ github.event_name != 'schedule' || steps.check_version.outputs.skip_build == 'false' }}
-        run: |
-          set -ex
-          echo "准备创建 GitHub Release..."
-          VERSION="${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}"
-          echo "使用版本号: $VERSION"
-          
-          # 检查 DEB 包是否存在
-          DEB_PATH=$(find build -name "cursor_*_amd64.deb" | head -1)
-          if [ -z "$DEB_PATH" ]; then
-            echo "错误: 找不到 DEB 包文件"
-            exit 1
-          fi
-          echo "找到 DEB 包: $DEB_PATH ($(du -h "$DEB_PATH" | cut -f1))"
-          
-          # 继续执行 GitHub Release 操作
-          echo "继续执行 GitHub Release 操作..."
-        
-      - name: 执行 GitHub Release
-        if: ${{ github.event_name != 'schedule' || steps.check_version.outputs.skip_build == 'false' }}
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}
-          name: Cursor ${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}
-          files: build/cursor_*_amd64.deb
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          name: cursor-deb-v${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}
+          path: |
+            build/cursor_*_amd64.deb
+            build/version_info.txt
+          retention-days: 90 
