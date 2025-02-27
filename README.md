@@ -1,48 +1,50 @@
-# Cursor 安装脚
+# Cursor Installation Scripts
 
-这个仓库包含了用于安装和构建 Cursor 编辑器的脚本工具。
+[中文文档](./README_zh.md)
 
-## 功能
+This repository contains script tools for installing and building the Cursor editor.
 
-- 自动下载并安装最新版本的 Cursor 编辑器
-- 支持 Debian/Ubuntu 系统的 DEB 包构建
-- 简单易用的命令行界面
+## Features
 
-## 使用方法
+- Automatically download and install the latest version of Cursor editor
+- Support for DEB package building for Debian/Ubuntu systems
+- Simple and easy-to-use command line interface
 
-### 一键安装
+## Usage
 
-使用以下命令可以直接从网络下载并执行安装脚本：
+### One-click Installation
+
+Use the following command to directly download and execute the installation script from the network:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/ITJesse/cursor-pack/main/install_cursor.sh)"
 ```
 
-### 安装 Cursor
+### Install Cursor
 
-运行以下命令来下载并安装最新版本的 Cursor：
+Run the following command to download and install the latest version of Cursor:
 
 ```bash
 bash install_cursor.sh
 ```
 
-### 构建 DEB 包
-如果你想为 Debian/Ubuntu 系统构建 DEB 包，可以使用：
+### Build DEB Package
+If you want to build a DEB package for Debian/Ubuntu systems, you can use:
 
 ```bash
 bash build_deb.sh
 ```
 
-## 系统要求
+## System Requirements
 
-- Linux 操作系统 (Debian/Ubuntu 系列优先支持)
-- bash 环境
-- curl 或 wget (用于下载)
+- Linux operating system (Debian/Ubuntu series preferred)
+- bash environment
+- curl or wget (for downloading)
 
-## 贡献
+## Contribution
 
-欢迎提交问题报告和改进建议！请通过 GitHub Issues 或 Pull Requests 参与项目。
+Bug reports and improvement suggestions are welcome! Please participate in the project through GitHub Issues or Pull Requests.
 
-## 许可证
+## License
 
 MIT
