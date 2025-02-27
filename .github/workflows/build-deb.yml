@@ -1,0 +1,89 @@
+name: 构建 Cursor DEB 包
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * *'  # 每天 UTC 时间 0:00 运行（北京时间 8:00）
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '指定版本号（可选）'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget dpkg fakeroot jq
+
+      - name: 检查最新版本
+        id: check_version
+        run: |
+          # 创建临时文件存储响应头
+          TEMP_HEADERS=$(mktemp)
+          # 只获取响应头，不下载文件
+          wget --spider --server-response --content-disposition "https://downloader.cursor.sh/linux/appImage/x64" 2> "$TEMP_HEADERS"
+          
+          # 从响应头中获取文件名
+          FILENAME=$(grep -i "Content-Disposition" "$TEMP_HEADERS" | sed -n 's/.*filename=\([^;]*\).*/\1/p' | tr -d '"')
+          
+          # 从文件名解析版本号
+          LATEST_VERSION=$(echo "$FILENAME" | grep -oP '\d+\.\d+\.\d+' | head -1)
+          
+          if [ -z "$LATEST_VERSION" ]; then
+            LATEST_VERSION=$(date +"%Y.%m.%d")
+          fi
+          
+          echo "最新版本: $LATEST_VERSION"
+          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          
+          # 检查 GitHub Releases 是否已存在此版本
+          RELEASES=$(curl -s "https://api.github.com/repos/$GITHUB_REPOSITORY/releases")
+          TAG_EXISTS=$(echo "$RELEASES" | jq -r ".[] | select(.tag_name == \"v$LATEST_VERSION\") | .tag_name")
+          
+          if [ -n "$TAG_EXISTS" ]; then
+            echo "已存在版本 $LATEST_VERSION 的发布，跳过构建"
+            echo "skip_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "需要构建新版本 $LATEST_VERSION"
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+          fi
+          
+          rm -f "$TEMP_HEADERS"
+
+      - name: 运行构建脚本
+        if: ${{ github.event_name != 'schedule' || steps.check_version.outputs.skip_build == 'false' }}
+        run: |
+          chmod +x ./build_deb.sh
+          ./build_deb.sh
+        env:
+          CURSOR_VERSION: ${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}
+
+      - name: 上传 DEB 包
+        if: ${{ github.event_name != 'schedule' || steps.check_version.outputs.skip_build == 'false' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: cursor-deb-package
+          path: build/cursor_*_amd64.deb
+          retention-days: 7
+          
+      - name: 创建或更新发布
+        if: ${{ github.event_name != 'schedule' || steps.check_version.outputs.skip_build == 'false' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}
+          name: Cursor ${{ github.event.inputs.version || steps.check_version.outputs.latest_version }}
+          files: build/cursor_*_amd64.deb
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

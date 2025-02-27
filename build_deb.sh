@@ -51,14 +51,20 @@ if [[ ! "$FILENAME" == *.AppImage ]]; then
 fi
 
 # 解析版本号
-VERSION=$(echo "$FILENAME" | grep -oP '\d+\.\d+\.\d+' | head -1)
+if [ -n "$CURSOR_VERSION" ]; then
+    # 使用环境变量中的版本号（如果存在）
+    VERSION="$CURSOR_VERSION"
+    echo "使用指定的版本号: $VERSION"
+else
+    # 从文件名解析版本号
+    VERSION=$(echo "$FILENAME" | grep -oP '\d+\.\d+\.\d+' | head -1)
 
-if [ -z "$VERSION" ]; then
-    echo "无法从文件名中解析版本号，将使用当前日期作为版本"
-    VERSION=$(date +"%Y.%m.%d")
+    if [ -z "$VERSION" ]; then
+        echo "无法从文件名中解析版本号，将使用当前日期作为版本"
+        VERSION=$(date +"%Y.%m.%d")
+    fi
+    echo "解析的版本号: $VERSION"
 fi
-
-echo "解析的版本号: $VERSION"
 
 # 使文件可执行
 chmod +x "$FILENAME"
