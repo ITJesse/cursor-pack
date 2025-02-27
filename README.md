@@ -15,7 +15,7 @@
 使用以下命令可以直接从网络下载并执行安装脚本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ITJesse/cursor-pack/main/install_cursor.sh | bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ITJesse/cursor-pack/main/install_cursor.sh)"
 ```
 
 ### 安装 Cursor
