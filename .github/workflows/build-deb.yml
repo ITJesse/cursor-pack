@@ -35,7 +35,7 @@ jobs:
           
           # 只获取响应头，不下载文件
           echo "正在获取 Cursor 下载信息..."
-          wget --spider --server-response --content-disposition "https://downloader.cursor.sh/linux/appImage/x64" 2> "$TEMP_HEADERS" || { echo "获取下载信息失败"; cat "$TEMP_HEADERS"; exit 1; }
+          wget --server-response --content-disposition "https://downloader.cursor.sh/linux/appImage/x64" 2> "$TEMP_HEADERS" || { echo "获取下载信息失败"; cat "$TEMP_HEADERS"; exit 1; }
           
           echo "响应头内容:"
           cat "$TEMP_HEADERS"
