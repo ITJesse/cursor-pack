@@ -156,7 +156,7 @@ cat > "$DEB_DIR/usr/share/applications/cursor.desktop" << EOF
 [Desktop Entry]
 Name=Cursor
 Comment=AI-first code editor
-Exec=/usr/bin/cursor %U
+Exec=/usr/bin/cursor --no-sandbox %U
 Icon=cursor
 Terminal=false
 Type=Application
@@ -178,7 +178,7 @@ fi
 # Create launcher script
 cat > "$DEB_DIR/usr/bin/cursor" << EOF
 #!/bin/bash
-nohup /opt/cursor/cursor.AppImage "\$@" >/dev/null 2>&1 &
+nohup /opt/cursor/cursor.AppImage --no-sandbox "\$@" >/dev/null 2>&1 &
 EOF
 chmod 755 "$DEB_DIR/usr/bin/cursor"
 
