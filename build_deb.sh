@@ -90,9 +90,8 @@ echo "Final version number: $VERSION"
 # Make file executable
 chmod +x "$FILENAME"
 
-# Add frameless mode modification
-echo "Modifying AppImage to enable frameless mode..."
 # Extract AppImage contents
+echo "Extracting AppImage contents..."
 ./"$FILENAME" --appimage-extract
 
 # Modify all JS files that might contain window configuration to add frameless mode
@@ -104,83 +103,67 @@ find squashfs-root/ -type f -name '*.js' \
 MODIFIED_COUNT=$(find squashfs-root/ -type f -name '*.js' -exec grep -l "frame:false" {} \; | wc -l)
 echo "Successfully modified $MODIFIED_COUNT files to frameless mode"
 
-# Download appimagetool
-echo "Downloading appimagetool..."
-wget -q --show-progress "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" -O ./appimagetool-x86_64.AppImage
-chmod +x ./appimagetool-x86_64.AppImage
-
-# Repackage AppImage
-echo "Repackaging AppImage..."
-./appimagetool-x86_64.AppImage squashfs-root/
-MODIFIED_FILENAME=$(ls -t *.AppImage | head -1)
-if [ "$MODIFIED_FILENAME" != "$FILENAME" ]; then
-    mv "$MODIFIED_FILENAME" "$FILENAME"
-fi
-
-# Extract icon
-echo "Extracting icon..."
-./"$FILENAME" --appimage-extract usr/share/icons
-
-# Create DEB package directory structure
+# Prepare DEB package
+echo "Preparing DEB package..."
 DEB_DIR="cursor-$VERSION"
-mkdir -p "$DEB_DIR/DEBIAN"
-mkdir -p "$DEB_DIR/usr/bin"
-mkdir -p "$DEB_DIR/usr/share/applications"
-mkdir -p "$DEB_DIR/usr/share/icons/hicolor/512x512/apps"
-mkdir -p "$DEB_DIR/opt/cursor"
+mv squashfs-root "$DEB_DIR"
+
+# Create directory structure
+mkdir -p "$DEB_DIR/usr/local/cursor" "$DEB_DIR/usr/local/bin" "$DEB_DIR/DEBIAN"
+
+# Move all files to usr/local/cursor
+echo "Moving files to usr/local/cursor..."
+find "$DEB_DIR" -maxdepth 1 -not -name "usr" -not -name "$DEB_DIR" -not -name "DEBIAN" | xargs -I{} mv {} "$DEB_DIR/usr/local/cursor/"
+
+# Create symlink in usr/local/bin
+echo "Creating symlink in usr/local/bin..."
+( cd "$DEB_DIR/usr/local/bin/" && ln -s ../cursor/cursor . )
+
+# Create wrapper script to suppress output and keep running after terminal closes
+cat > "$DEB_DIR/usr/local/cursor/cursor-wrapper" << 'EOF'
+#!/bin/bash
+nohup /usr/local/cursor/cursor "$@" > /dev/null 2>&1 &
+EOF
+
+# Make wrapper script executable
+chmod 755 "$DEB_DIR/usr/local/cursor/cursor-wrapper"
+
+# Update symlink to point to wrapper script
+( cd "$DEB_DIR/usr/local/bin/" && rm -f cursor && ln -s ../cursor/cursor-wrapper cursor )
 
 # Create control file
 cat > "$DEB_DIR/DEBIAN/control" << EOF
 Package: cursor
 Version: $VERSION
-Section: development
-Priority: optional
 Architecture: amd64
 Maintainer: Cursor Team <support@cursor.sh>
+Installed-Size: $(du -s "$DEB_DIR" | cut -f1)
+Section: misc
+Priority: optional
 Description: AI-first code editor
  Cursor is an AI-powered code editor built on VSCode,
  integrating powerful AI features to help developers
  write code more efficiently.
 EOF
 
-# Create postinst script
-cat > "$DEB_DIR/DEBIAN/postinst" << EOF
-#!/bin/bash
-chmod +x /opt/cursor/cursor.AppImage
-update-desktop-database -q || true
-EOF
-chmod 755 "$DEB_DIR/DEBIAN/postinst"
+# Create postinst script to fix sandbox permissions
+echo "Creating postinst script..."
+cat > "$DEB_DIR/DEBIAN/postinst" << 'EOF'
+#!/bin/sh
+set -e
 
-# Create desktop file
-cat > "$DEB_DIR/usr/share/applications/cursor.desktop" << EOF
-[Desktop Entry]
-Name=Cursor
-Comment=AI-first code editor
-Exec=/usr/bin/cursor --no-sandbox %U
-Icon=cursor
-Terminal=false
-Type=Application
-Categories=Development;IDE;
-StartupWMClass=Cursor
-EOF
-
-# Copy AppImage to DEB package
-echo "Copying AppImage to DEB package..."
-cp "$FILENAME" "$DEB_DIR/opt/cursor/cursor.AppImage"
-
-# Copy icon
-if [ -d "squashfs-root/usr/share/icons" ]; then
-    find squashfs-root/usr/share/icons -name "*.png" -o -name "*.svg" | head -1 | xargs -I{} cp {} "$DEB_DIR/usr/share/icons/hicolor/512x512/apps/cursor.png"
-else
-    echo "Warning: Could not find icon file"
+# Fix chrome-sandbox permissions
+if [ -f /usr/local/cursor/chrome-sandbox ]; then
+    echo "Setting correct permissions for chrome-sandbox..."
+    chown root:root /usr/local/cursor/chrome-sandbox
+    chmod 4755 /usr/local/cursor/chrome-sandbox
 fi
 
-# Create launcher script
-cat > "$DEB_DIR/usr/bin/cursor" << EOF
-#!/bin/bash
-nohup /opt/cursor/cursor.AppImage --no-sandbox "\$@" >/dev/null 2>&1 &
+exit 0
 EOF
-chmod 755 "$DEB_DIR/usr/bin/cursor"
+
+# Make postinst script executable
+chmod 755 "$DEB_DIR/DEBIAN/postinst"
 
 # Build DEB package
 echo "Building DEB package..."
