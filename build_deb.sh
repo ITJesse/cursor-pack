@@ -66,10 +66,58 @@ else
     echo "解析的版本号: $VERSION"
 fi
 
+# 获取Git短SHA（如果在Git仓库中）
+if [ -n "$GIT_SHA" ]; then
+    # 使用环境变量中的SHA（如果存在）
+    SHORT_SHA="${GIT_SHA:0:7}"
+    echo "使用指定的Git SHA: $SHORT_SHA"
+else
+    # 尝试从Git仓库获取
+    if git rev-parse --is-inside-work-tree &>/dev/null; then
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        echo "从Git仓库获取SHA: $SHORT_SHA"
+    else
+        # 如果不在Git仓库中，使用时间戳
+        SHORT_SHA=$(date +"%Y%m%d%H%M%S" | tail -c 7)
+        echo "不在Git仓库中，使用时间戳: $SHORT_SHA"
+    fi
+fi
+
+# 在版本号末尾添加短SHA
+VERSION="${VERSION}-${SHORT_SHA}"
+echo "最终版本号: $VERSION"
+
 # 使文件可执行
 chmod +x "$FILENAME"
 
-# 仅提取图标
+# 添加无边框模式修改
+echo "正在修改AppImage以启用无边框模式..."
+# 提取AppImage内容
+./"$FILENAME" --appimage-extract
+
+# 修改所有可能包含窗口配置的JS文件，添加无边框模式
+echo "正在查找并修改所有相关JS文件以启用无边框模式..."
+find squashfs-root/ -type f -name '*.js' \
+  -exec grep -l ,minHeight {} \; \
+  -exec sed -i 's/,minHeight/,frame:false,minHeight/g' {} \;
+
+MODIFIED_COUNT=$(find squashfs-root/ -type f -name '*.js' -exec grep -l "frame:false" {} \; | wc -l)
+echo "成功修改了 $MODIFIED_COUNT 个文件为无边框模式"
+
+# 下载appimagetool
+echo "正在下载appimagetool..."
+wget -q --show-progress "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" -O ./appimagetool-x86_64.AppImage
+chmod +x ./appimagetool-x86_64.AppImage
+
+# 重新打包AppImage
+echo "正在重新打包AppImage..."
+./appimagetool-x86_64.AppImage squashfs-root/
+MODIFIED_FILENAME=$(ls -t *.AppImage | head -1)
+if [ "$MODIFIED_FILENAME" != "$FILENAME" ]; then
+    mv "$MODIFIED_FILENAME" "$FILENAME"
+fi
+
+# 提取图标
 echo "正在提取图标..."
 ./"$FILENAME" --appimage-extract usr/share/icons
 
