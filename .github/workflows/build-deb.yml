@@ -69,7 +69,7 @@ jobs:
 
       - name: 上传 DEB 包
         if: ${{ github.event_name != 'schedule' || steps.check_version.outputs.skip_build == 'false' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cursor-deb-package
           path: build/cursor_*_amd64.deb
