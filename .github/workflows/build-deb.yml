@@ -25,57 +25,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget dpkg fakeroot jq
 
-      - name: 检查最新版本
-        id: check_version
-        run: |
-          set -ex
-          # 创建临时文件存储响应头
-          TEMP_HEADERS=$(mktemp)
-          echo "临时文件路径: $TEMP_HEADERS"
-          
-          # 只获取响应头，不下载文件
-          echo "正在获取 Cursor 下载信息..."
-          wget --server-response --content-disposition "https://downloader.cursor.sh/linux/appImage/x64" 2> "$TEMP_HEADERS" || { echo "获取下载信息失败"; cat "$TEMP_HEADERS"; exit 1; }
-          
-          echo "响应头内容:"
-          cat "$TEMP_HEADERS"
-          
-          # 从响应头中获取文件名
-          FILENAME=$(grep -i "Content-Disposition" "$TEMP_HEADERS" | sed -n 's/.*filename=\([^;]*\).*/\1/p' | tr -d '"')
-          echo "解析的文件名: $FILENAME"
-          
-          # 从文件名解析版本号
-          LATEST_VERSION=$(echo "$FILENAME" | grep -oP '\d+\.\d+\.\d+' | head -1)
-          echo "从文件名解析的版本号: $LATEST_VERSION"
-          
-          if [ -z "$LATEST_VERSION" ]; then
-            echo "无法从文件名解析版本号，使用当前日期作为版本"
-            LATEST_VERSION=$(date +"%Y.%m.%d")
-          fi
-          
-          echo "最终使用的版本号: $LATEST_VERSION"
-          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
-          
-          # 检查 GitHub Releases 是否已存在此版本
-          echo "正在检查 GitHub Releases..."
-          RELEASES=$(curl -s "https://api.github.com/repos/$GITHUB_REPOSITORY/releases")
-          echo "获取到的 Releases 数量: $(echo "$RELEASES" | jq '. | length')"
-          
-          TAG_EXISTS=$(echo "$RELEASES" | jq -r ".[] | select(.tag_name == \"v$LATEST_VERSION\") | .tag_name")
-          echo "检查标签 v$LATEST_VERSION 是否存在: $TAG_EXISTS"
-          
-          if [ -n "$TAG_EXISTS" ]; then
-            echo "已存在版本 $LATEST_VERSION 的发布，跳过构建"
-            echo "skip_build=true" >> $GITHUB_OUTPUT
-          else
-            echo "需要构建新版本 $LATEST_VERSION"
-            echo "skip_build=false" >> $GITHUB_OUTPUT
-          fi
-          
-          rm -f "$TEMP_HEADERS"
-
       - name: 运行构建脚本
-        if: ${{ github.event_name != 'schedule' || steps.check_version.outputs.skip_build == 'false' }}
         run: |
           set -ex
           echo "开始构建 DEB 包..."

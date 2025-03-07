@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Set download URL
-DOWNLOAD_URL="https://downloader.cursor.sh/linux/appImage/x64"
+# Set download API URL
+API_URL="https://www.cursor.com/api/download?platform=linux-x64&releaseTrack=latest"
 
 # Get the directory where the script is located
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
@@ -13,6 +13,15 @@ mkdir -p "$ABSOLUTE_BUILD_DIR"
 # Create temporary directory
 TEMP_DIR=$(mktemp -d)
 cd "$TEMP_DIR"
+
+echo "Fetching download URL from API..."
+# Get the download URL from the API
+DOWNLOAD_URL=$(curl -s "$API_URL" | grep -o '"downloadUrl":"[^"]*"' | cut -d'"' -f4)
+
+if [ -z "$DOWNLOAD_URL" ]; then
+    echo "Failed to get download URL from API"
+    exit 1
+fi
 
 echo "Downloading Cursor AppImage from $DOWNLOAD_URL..."
 
