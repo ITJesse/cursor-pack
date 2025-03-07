@@ -118,27 +118,23 @@ DEB_DIR="cursor-$VERSION"
 mv squashfs-root "$DEB_DIR"
 
 # Create directory structure
-mkdir -p "$DEB_DIR/usr/local/cursor" "$DEB_DIR/usr/local/bin" "$DEB_DIR/DEBIAN"
+mkdir -p "$DEB_DIR/DEBIAN"
 
 # Move all files to usr/local/cursor
 echo "Moving files to usr/local/cursor..."
-find "$DEB_DIR" -maxdepth 1 -not -name "usr" -not -name "$DEB_DIR" -not -name "DEBIAN" | xargs -I{} mv {} "$DEB_DIR/usr/local/cursor/"
-
-# Create symlink in usr/local/bin
-echo "Creating symlink in usr/local/bin..."
-( cd "$DEB_DIR/usr/local/bin/" && ln -s ../cursor/cursor . )
+find "$DEB_DIR" -maxdepth 1 -not -name "usr" -not -name "$DEB_DIR" -not -name "DEBIAN" | xargs -I{} mv {} "$DEB_DIR/usr/share/cursor/"
 
 # Create wrapper script to suppress output and keep running after terminal closes
-cat > "$DEB_DIR/usr/local/cursor/cursor-wrapper" << 'EOF'
+cat > "$DEB_DIR/usr/share/cursor/cursor-wrapper" << 'EOF'
 #!/bin/bash
-nohup /usr/local/cursor/cursor "$@" > /dev/null 2>&1 &
+nohup /usr/share/cursor/cursor "$@" > /dev/null 2>&1 &
 EOF
 
 # Make wrapper script executable
 chmod 755 "$DEB_DIR/usr/local/cursor/cursor-wrapper"
 
 # Update symlink to point to wrapper script
-( cd "$DEB_DIR/usr/local/bin/" && rm -f cursor && ln -s ../cursor/cursor-wrapper cursor )
+( cd "$DEB_DIR/usr/bin/" && rm -f cursor && ln -s ../share/cursor/cursor-wrapper cursor )
 
 # Create control file
 cat > "$DEB_DIR/DEBIAN/control" << EOF
@@ -162,10 +158,10 @@ cat > "$DEB_DIR/DEBIAN/postinst" << 'EOF'
 set -e
 
 # Fix chrome-sandbox permissions
-if [ -f /usr/local/cursor/chrome-sandbox ]; then
+if [ -f /usr/share/cursor/chrome-sandbox ]; then
     echo "Setting correct permissions for chrome-sandbox..."
-    chown root:root /usr/local/cursor/chrome-sandbox
-    chmod 4755 /usr/local/cursor/chrome-sandbox
+    chown root:root /usr/share/cursor/chrome-sandbox
+    chmod 4755 /usr/share/cursor/chrome-sandbox
 fi
 
 exit 0
