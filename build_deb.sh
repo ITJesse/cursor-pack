@@ -1,5 +1,25 @@
 #!/bin/bash
 
+# Parse command line arguments
+LOCAL_APPIMAGE=""
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --appimage=*)
+      LOCAL_APPIMAGE="${1#*=}"
+      shift
+      ;;
+    --appimage)
+      LOCAL_APPIMAGE="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--appimage=/path/to/cursor.AppImage]"
+      exit 1
+      ;;
+  esac
+done
+
 # Set download API URL
 API_URL="https://www.cursor.com/api/download?platform=linux-x64&releaseTrack=latest"
 
@@ -14,47 +34,72 @@ mkdir -p "$ABSOLUTE_BUILD_DIR"
 TEMP_DIR=$(mktemp -d)
 cd "$TEMP_DIR"
 
-echo "Fetching download URL from API..."
-# Get the download URL from the API
-DOWNLOAD_URL=$(curl -s "$API_URL" | grep -o '"downloadUrl":"[^"]*"' | cut -d'"' -f4)
-
-if [ -z "$DOWNLOAD_URL" ]; then
-    echo "Failed to get download URL from API"
+if [ -n "$LOCAL_APPIMAGE" ]; then
+  # Use local AppImage file
+  echo "Using local AppImage file: $LOCAL_APPIMAGE"
+  
+  # Convert to absolute path if it's a relative path
+  if [[ ! "$LOCAL_APPIMAGE" = /* ]]; then
+    LOCAL_APPIMAGE="$SCRIPT_DIR/$LOCAL_APPIMAGE"
+    echo "Converted to absolute path: $LOCAL_APPIMAGE"
+  fi
+  
+  if [ ! -f "$LOCAL_APPIMAGE" ]; then
+    echo "Error: Specified AppImage file does not exist: $LOCAL_APPIMAGE"
     exit 1
+  fi
+  
+  # Copy the file to temp directory
+  echo "Copying AppImage to temporary directory..."
+  cp "$LOCAL_APPIMAGE" .
+  FILENAME=$(basename "$LOCAL_APPIMAGE")
+  echo "Using file: $FILENAME"
+else
+  echo "Fetching download URL from API..."
+  # Get the download URL from the API
+  DOWNLOAD_URL=$(curl -s "$API_URL" | grep -o '"downloadUrl":"[^"]*"' | cut -d'"' -f4)
+
+  if [ -z "$DOWNLOAD_URL" ]; then
+      echo "Failed to get download URL from API"
+      exit 1
+  fi
+
+  echo "Downloading Cursor AppImage from $DOWNLOAD_URL..."
+
+  # Use a single download operation to get the file and determine the filename
+  TEMP_HEADERS=$(mktemp)
+  wget -q --show-progress --server-response --content-disposition "$DOWNLOAD_URL" 2> "$TEMP_HEADERS"
+
+  # Ensure download was successful
+  if [ $? -ne 0 ]; then
+      echo "Download failed, please check your network connection or if the URL is valid"
+      rm -f "$TEMP_HEADERS"
+      exit 1
+  fi
+
+  # Get filename from response headers
+  FILENAME=$(grep -i "Content-Disposition" "$TEMP_HEADERS" | sed -n 's/.*filename=\([^;]*\).*/\1/p' | tr -d '"')
+
+  # If unable to get filename from response headers, try to get from saved file
+  if [ -z "$FILENAME" ]; then
+      # Find the most recent file in the current directory
+      FILENAME=$(ls -t | head -1)
+      # If the filename is not an AppImage, rename it to cursor.AppImage
+      if [[ ! "$FILENAME" == *.AppImage ]]; then
+          mv "$FILENAME" cursor.AppImage
+          FILENAME="cursor.AppImage"
+      fi
+  fi
+
+  echo "Downloaded filename: $FILENAME"
+  
+  # Clean up headers file
+  rm -f "$TEMP_HEADERS"
 fi
-
-echo "Downloading Cursor AppImage from $DOWNLOAD_URL..."
-
-# Use a single download operation to get the file and determine the filename
-TEMP_HEADERS=$(mktemp)
-wget -q --show-progress --server-response --content-disposition "$DOWNLOAD_URL" 2> "$TEMP_HEADERS"
-
-# Ensure download was successful
-if [ $? -ne 0 ]; then
-    echo "Download failed, please check your network connection or if the URL is valid"
-    rm -f "$TEMP_HEADERS"
-    exit 1
-fi
-
-# Get filename from response headers
-FILENAME=$(grep -i "Content-Disposition" "$TEMP_HEADERS" | sed -n 's/.*filename=\([^;]*\).*/\1/p' | tr -d '"')
-
-# If unable to get filename from response headers, try to get from saved file
-if [ -z "$FILENAME" ]; then
-    # Find the most recent file in the current directory
-    FILENAME=$(ls -t | head -1)
-    # If the filename is not an AppImage, rename it to cursor.AppImage
-    if [[ ! "$FILENAME" == *.AppImage ]]; then
-        mv "$FILENAME" cursor.AppImage
-        FILENAME="cursor.AppImage"
-    fi
-fi
-
-echo "Downloaded filename: $FILENAME"
 
 # Ensure filename is correct
 if [[ ! "$FILENAME" == *.AppImage ]]; then
-    echo "Warning: Downloaded file may not be in AppImage format, renaming to cursor.AppImage"
+    echo "Warning: File may not be in AppImage format, renaming to cursor.AppImage"
     mv "$FILENAME" cursor.AppImage
     FILENAME="cursor.AppImage"
 fi
@@ -119,9 +164,11 @@ mv squashfs-root "$DEB_DIR"
 
 # Create directory structure
 mkdir -p "$DEB_DIR/DEBIAN"
+mkdir -p "$DEB_DIR/usr/share/cursor"
+mkdir -p "$DEB_DIR/usr/bin"
 
-# Move all files to usr/local/cursor
-echo "Moving files to usr/local/cursor..."
+# Move all files to usr/share/cursor
+echo "Moving files to usr/share/cursor..."
 find "$DEB_DIR" -maxdepth 1 -not -name "usr" -not -name "$DEB_DIR" -not -name "DEBIAN" | xargs -I{} mv {} "$DEB_DIR/usr/share/cursor/"
 
 # Create wrapper script to suppress output and keep running after terminal closes
@@ -131,9 +178,9 @@ nohup /usr/share/cursor/cursor "$@" > /dev/null 2>&1 &
 EOF
 
 # Make wrapper script executable
-chmod 755 "$DEB_DIR/usr/local/cursor/cursor-wrapper"
+chmod 755 "$DEB_DIR/usr/share/cursor/cursor-wrapper"
 
-# Update symlink to point to wrapper script
+# Update symlink to point to wrapper script - remove existing link first if it exists
 ( cd "$DEB_DIR/usr/bin/" && rm -f cursor && ln -s ../share/cursor/cursor-wrapper cursor )
 
 # Create control file
@@ -187,4 +234,3 @@ fi
 # Clean up temporary files
 cd ..
 rm -rf "$TEMP_DIR"
-rm -f "$TEMP_HEADERS"
